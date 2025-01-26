@@ -1,0 +1,75 @@
+로컬 환경에서 Windows, VSCode, Python을 사용하며 GPU 없이 LLaMA 모델을 테스트하려면 다음과 같은 방법으로 진행할 수 있습니다. 이 과정은 CPU 환경에 최적화되어 있으며, 간단한 입력/출력 테스트와 모델 성능 확인을 목표로 합니다.
+
+1. 필수 라이브러리 설치
+pip install transformers datasets
+
+2. 코드: 로컬 환경에서 테스트
+아래는 로컬 환경에서 LLaMA 모델을 사용하는 예제입니다.
+
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+# 1. 모델과 토크나이저 로드
+model_name = "decapoda-research/llama-7b-hf"  # Hugging Face에서 변환된 LLaMA 모델 사용
+tokenizer = AutoTokenizer.from_pretrained(model_name)  # 토크나이저 로드
+model = AutoModelForCausalLM.from_pretrained(model_name)  # 모델 로드 (CPU 환경)
+
+# 2. 입력 텍스트 정의
+test_input = "Explain the concept of machine learning in simple terms."
+
+# 3. 입력 토큰화
+inputs = tokenizer(test_input, return_tensors="pt")  # CPU 환경에서 실행
+
+# 4. 모델 결과 생성
+print("Generating response... (CPU 환경에서는 느릴 수 있습니다)")
+outputs = model.generate(
+    inputs["input_ids"],
+    max_length=100,  # 생성 텍스트 최대 길이
+    num_beams=3,  # 빔 서치 사용 (생성 품질 향상)
+    no_repeat_ngram_size=2,  # 반복 방지
+    early_stopping=True,  # 빠른 종료 활성화
+)
+
+# 5. 생성된 결과 디코딩 및 출력
+
+generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+print("\nGenerated Response:")
+print(generated_text)
+
+3. 실행 방법
+VSCode 설정:
+VSCode에서 Python 인터프리터를 설정합니다.
+설치된 Python 버전을 선택하고 위의 스크립트를 실행합니다.
+
+CPU 환경 최적화:
+GPU가 없는 환경이므로 CPU만 사용하게 됩니다. LLaMA 모델은 크기가 크기 때문에 속도가 느릴 수 있습니다.
+필요한 경우 더 작은 모델로 테스트합니다. (decapoda-research/llama-7b-hf 대신 llama-2-7b-hf 등으로 대체)
+
+출력 확인:
+모델이 입력 텍스트에 대해 생성한 응답을 콘솔에서 확인합니다.
+
+4. CPU 환경 최적화를 위한 추가 팁
+작은 모델 사용: LLaMA 7B 모델 대신 더 작은 크기의 모델을 사용해 테스트 시간을 단축할 수 있습니다.
+
+model_name = "huggingface/llama-2-7b"
+
+FP16 비활성화: LLaMA 모델은 기본적으로 FP16을 사용할 수 있습니다. 하지만 CPU 환경에서는 FP32가 기본으로 설정되므로 추가 설정 없이 진행합니다.
+
+max_length 조정: 생성된 텍스트의 최대 길이를 줄여 메모리와 시간을 절약합니다:
+max_length=50
+
+5. 모델 테스트 결과 예시
+입력 텍스트:
+Explain the concept of machine learning in simple terms.
+
+생성된 출력 예시:
+Machine learning is a field of computer science that gives computers the ability to learn and improve from experience without being explicitly programmed. In simple terms, it’s like teaching a computer to recognize patterns and make decisions based on data.
+
+주의 사항
+CPU 환경에서는 느릴 수 있음:
+LLaMA 모델은 큰 메모리를 요구하기 때문에 CPU 환경에서는 속도가 느릴 수 있습니다. 테스트 목적으로만 사용을 권장합니다.
+
+모델 파일 다운로드:
+Hugging Face 모델 허브에서 제공된 변환된 LLaMA 모델(llama-7b-hf) 파일을 먼저 다운로드해야 합니다.
+
+인터넷 연결 필요:
+처음 모델을 로드할 때 Hugging Face에서 모델 가중치와 토크나이저를 다운로드합니다.
