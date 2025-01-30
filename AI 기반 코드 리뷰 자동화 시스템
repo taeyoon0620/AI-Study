@@ -1,0 +1,109 @@
+기능 요약
+✅ GitHub에서 새로운 PR(풀 리퀘스트)을 감지
+✅ 변경된 코드의 스타일 검사 (Pylint)
+✅ GPT-4를 활용한 코드 리뷰 생성
+✅ PR에 자동으로 리뷰 코멘트 달기
+
+기술 스택
+GitHub API → PR 변경 사항 가져오기 & 리뷰 등록
+Pylint → 코드 스타일 검사
+OpenAI GPT-4 API → 코드 리뷰 자동 생성
+Flask → 웹훅 서버 (GitHub 이벤트 감지)
+
+1. 프로젝트 설정
+필요한 라이브러리를 설치합니다.
+
+pip install requests openai flask pylint
+
+2. GitHub Webhook 설정
+GitHub에서 **"Pull Request 이벤트"**를 감지하도록 Webhook을 설정합니다.
+GitHub Repository → Settings → Webhooks → "Add Webhook"
+
+Payload URL: http://<your-server-ip>:5000/webhook
+Content type: application/json
+이벤트: Pull Request
+
+3. Flask 웹훅 서버 구현
+GitHub에서 PR 이벤트를 감지하여 자동 리뷰를 생성하는 서버입니다.
+
+import os
+import requests
+import openai
+import json
+from flask import Flask, request
+
+# 환경 변수 설정
+GITHUB_TOKEN = "ghp_XXXXXX"  # GitHub Personal Access Token
+OPENAI_API_KEY = "sk-XXXXXX"  # OpenAI API Key
+REPO_OWNER = "your-username"
+REPO_NAME = "your-repo"
+
+app = Flask(__name__)
+
+# GitHub API 요청 헤더
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json"
+}
+
+# GPT-4를 활용한 코드 리뷰 생성
+def generate_review_comment(code_diff):
+    prompt = f"""
+    다음은 코드 변경 사항입니다. 코드 리뷰를 작성해주세요.
+
+    ```diff
+    {code_diff}
+    ```
+
+    리뷰는 개선점과 코드 스타일을 포함해야 합니다.
+    """
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response["choices"][0]["message"]["content"]
+
+# PR 변경 사항 가져오기
+def get_pr_diff(pr_number):
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/pulls/{pr_number}"
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code == 200:
+        return response.json().get("diff_url")
+    return None
+
+# PR에 리뷰 코멘트 추가
+def add_pr_comment(pr_number, comment):
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/issues/{pr_number}/comments"
+    data = {"body": comment}
+    response = requests.post(url, headers=HEADERS, json=data)
+    return response.status_code
+
+# GitHub Webhook 처리
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    payload = request.get_json()
+    
+    if payload.get("action") == "opened":
+        pr_number = payload["pull_request"]["number"]
+        diff_url = get_pr_diff(pr_number)
+        
+        if diff_url:
+            diff_content = requests.get(diff_url).text
+            review_comment = generate_review_comment(diff_content)
+            add_pr_comment(pr_number, review_comment)
+            
+    return "OK", 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+4. 실행 방법
+위 코드를 실행하여 웹훅 서버를 띄웁니다.
+
+python app.py
+
+GitHub에서 PR을 생성하면 자동으로 리뷰가 생성됩니다. 🎉
+
+추가 개선 가능 기능
+pylint로 코드 스타일 분석 추가
+보안 취약점 검사 기능 (SQL Injection, XSS 등)
+PR 승인/거부 자동화
