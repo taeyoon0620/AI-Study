@@ -1,0 +1,80 @@
+LangChain은 LLM(대형 언어 모델)과 다양한 외부 도구(API, 데이터베이스, 검색 엔진 등)를 쉽게 연결하여 사용할 수 있도록 돕는 프레임워크입니다.
+
+1. LangChain 기본 예제 (OpenAI API 연동)
+아래는 OpenAI의 gpt-4 모델을 LangChain을 통해 사용하는 간단한 예제입니다.
+
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
+
+# OpenAI API 키 설정 (환경 변수 또는 직접 입력 가능)
+
+os.environ["OPENAI_API_KEY"] = "your-api-key"
+
+# LangChain을 이용한 ChatGPT 모델 사용
+llm = ChatOpenAI(model_name="gpt-4")
+
+# 사용자 메시지 입력
+messages = [HumanMessage(content="안녕하세요! 오늘 날씨는 어떤가요?")]
+
+# 모델 응답 출력
+response = llm(messages)
+print(response.content)
+2. LangChain에서 프롬프트 템플릿 활용
+LangChain의 PromptTemplate을 사용하여 동적인 프롬프트를 만들 수 있습니다.
+
+from langchain.prompts import PromptTemplate
+
+# 프롬프트 템플릿 생성
+template = PromptTemplate(
+    input_variables=["주제"],
+    template="다음 주제에 대한 3가지 흥미로운 사실을 알려줘: {주제}"
+)
+
+# 템플릿을 사용하여 프롬프트 생성
+prompt_text = template.format(주제="인공지능")
+print(prompt_text)
+출력:
+다음 주제에 대한 3가지 흥미로운 사실을 알려줘: 인공지능
+
+3. LangChain에서 체인(Chains) 활용
+여러 개의 LangChain 기능을 연결하여 워크플로우를 자동화할 수 있습니다.
+
+from langchain.chains import LLMChain
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
+
+# LLM 모델 설정
+llm = ChatOpenAI(model_name="gpt-4")
+
+# 프롬프트 템플릿 생성
+prompt = PromptTemplate(
+    input_variables=["주제"],
+    template="다음 주제에 대한 짧은 설명을 해줘: {주제}"
+)
+
+# 체인 생성
+chain = LLMChain(llm=llm, prompt=prompt)
+
+# 실행
+result = chain.run("양자 컴퓨팅")
+print(result)
+4. LangChain에서 벡터 데이터베이스(ChromaDB) 연동
+LangChain을 사용하여 문서를 벡터화하고 검색하는 예제입니다.
+
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.document_loaders import TextLoader
+
+# OpenAI 임베딩 모델 사용
+embeddings = OpenAIEmbeddings()
+
+# 문서 로드 및 벡터 저장소 생성
+loader = TextLoader("example.txt")
+documents = loader.load()
+vectorstore = Chroma.from_documents(documents, embeddings)
+
+# 유사한 문서 검색
+query = "양자 컴퓨팅이란?"
+results = vectorstore.similarity_search(query)
+for doc in results:
+    print(doc.page_content)
