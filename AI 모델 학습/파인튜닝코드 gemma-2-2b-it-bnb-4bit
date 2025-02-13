@@ -1,0 +1,91 @@
+!pip install unsloth
+
+from unsloth import FastLanguageModel
+import torch
+
+max_seq_length = 8192 # Choose any! We auto support RoPE Scaling internally!
+dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
+load_in_4bit = True # Use 4bit quantization to reduce memory usage. Can be False.
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = "unsloth/gemma-2-2b-it-bnb-4bit",
+    max_seq_length = max_seq_length,
+    dtype = dtype,
+    load_in_4bit = load_in_4bit,
+    # token = "hf_...", # use one if using gated models like meta-llama/Llama-2-7b-hf
+)
+
+model = FastLanguageModel.get_peft_model(
+    model,
+    r = 32, # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                      "gate_proj", "up_proj", "down_proj",],
+    lora_alpha = 16,
+    lora_dropout = 0, # Supports any, but = 0 is optimized
+    bias = "none",    # Supports any, but = "none" is optimized
+    # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
+    use_gradient_checkpointing = "unsloth", # True or "unsloth" for very long context
+    random_state = 3407,
+    use_rslora = False,  # We support rank stabilized LoRA
+    loftq_config = None, # And LoftQ
+)
+
+from datasets import load_dataset
+
+# 데이터셋 불러오기
+dataset = load_dataset("Bring2It2On/gorani_dataset")
+
+# train, test 스플릿 확인 (train, test 두 가지로 나뉘어 있음)
+print(dataset)  # {'train': ..., 'test': ...}
+
+!pip install wandb
+
+import wandb
+
+# ✅ Weights & Biases 로그인
+wandb.login(key="965fe6614b52aac035a6cb8de9aae946c8ab377c")
+
+# WandB 프로젝트 초기화
+wandb.init(project="gemma_finetune", name="test1")
+
+from trl import SFTTrainer
+from transformers import TrainingArguments, EarlyStoppingCallback
+from unsloth import is_bfloat16_supported
+
+# 체크포인트 경로 설정
+checkpoint_path = "outputs/checkpoint-700"
+
+trainer = SFTTrainer(
+    model = model,
+    tokenizer = tokenizer,
+    train_dataset = dataset["train"],  # ✅ 'train' split을 명확히 지정
+    eval_dataset = dataset["test"].shuffle(seed=1234).select(range(50)),   # ✅ 'test' split을 명확히 지정
+    dataset_text_field = "text",
+    max_seq_length = max_seq_length,
+    dataset_num_proc = 2,
+    packing = False,
+    args = TrainingArguments(
+        per_device_train_batch_size = 8,
+        gradient_accumulation_steps = 1,
+        warmup_steps = 5,
+        learning_rate = 2e-4,
+        fp16 = not is_bfloat16_supported(),
+        bf16 = is_bfloat16_supported(),
+        logging_steps = 10,
+        num_train_epochs = 3,
+        optim = "adamw_8bit",
+        weight_decay = 0.01,
+        lr_scheduler_type = "linear",
+        seed = 3407,
+        output_dir = "outputs",
+        report_to = "wandb",
+        evaluation_strategy = "steps",
+        eval_steps = 50,
+        # ✅ Checkpoint 설정 (중간 저장)
+        save_steps = 100,  # 매 10 스텝마다 저장
+        save_total_limit = 3,  # 최근 3개 체크포인트만 유지
+        resume_from_checkpoint=checkpoint_path,  # 체크포인트에서 재개
+    ),
+)
+
+trainer_stats = trainer.train()
