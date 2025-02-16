@@ -1,0 +1,98 @@
+LangGraph를 활용하여 번역 품질을 비교하고, 더 나은 번역을 선택하는 시스템을 구축할 수 있습니다.
+아래 코드는 두 가지 번역 방법(예: OpenAI GPT-4o-mini와 다른 번역 API)을 비교하여 더 나은 번역을 선택하는 LangGraph 기반의 파이프라인을 구현한 것입니다.
+
+
+📌 주요 기능
+두 개의 번역 모델을 사용 (OpenAI API 및 Hugging Face 번역 모델 예제)
+LangGraph로 워크플로우 구성
+간단한 평가 함수로 번역 품질 비교 후 선택
+
+from typing import Dict, Any
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
+from langgraph.graph import StateGraph, END
+
+# OpenAI API 설정
+os.environ["OPENAI_API_KEY"] = "your-api-key"
+
+# 상태 관리 (번역 결과 저장)
+class TranslateState(Dict[str, Any]):
+    input_text: str
+    gpt_translation: str
+    other_translation: str
+    best_translation: str
+
+# OpenAI 번역 모델 (GPT-4o-mini 사용)
+def translate_with_gpt(state: TranslateState):
+    llm = ChatOpenAI(model_name="gpt-4o-mini")
+    response = llm([HumanMessage(content=f"Translate this into Japanese: {state['input_text']}")])
+    state["gpt_translation"] = response.content
+    return state
+
+# 다른 번역 API 사용 (예: Hugging Face 번역 모델)
+def translate_with_other(state: TranslateState):
+    # 실제 구현에서는 Hugging Face Transformers, DeepL API 등을 활용 가능
+    state["other_translation"] = f"[HF Model] {state['input_text']} (Translated)"  # 임시 출력
+    return state
+
+# 번역 비교 함수 (간단한 예제)
+def evaluate_translation(state: TranslateState):
+    """ 두 번역 결과 중 품질이 더 나은 것을 선택 """
+    gpt_len = len(state["gpt_translation"])
+    other_len = len(state["other_translation"])
+
+    # 예제: 더 긴 번역이 더 나은 것으로 간주 (실제 평가 메트릭 적용 가능)
+    if gpt_len > other_len:
+        state["best_translation"] = state["gpt_translation"]
+    else:
+        state["best_translation"] = state["other_translation"]
+
+    return state
+
+# LangGraph 워크플로우 구축
+workflow = StateGraph(TranslateState)
+
+# 노드 추가 (번역 단계)
+workflow.add_node("GPT_Translation", translate_with_gpt)
+workflow.add_node("Other_Translation", translate_with_other)
+workflow.add_node("Evaluate", evaluate_translation)
+
+# 노드 연결 (동시에 번역 실행 → 평가 후 종료)
+workflow.add_edge("GPT_Translation", "Evaluate")
+workflow.add_edge("Other_Translation", "Evaluate")
+workflow.add_edge("Evaluate", END)
+
+# 시작 지점 설정
+workflow.set_entry_point(["GPT_Translation", "Other_Translation"])
+
+# LangGraph 실행 엔진 생성
+graph = workflow.compile()
+
+# 테스트 실행
+input_text = "Hello, how are you?"
+state = {"input_text": input_text}
+
+result = graph.invoke(state)
+print(f"✅ Best Translation: {result['best_translation']}")
+
+
+📝 코드 설명
+TranslateState: 상태를 관리하는 클래스
+translate_with_gpt(): OpenAI GPT-4o-mini를 사용하여 번역
+translate_with_other(): 다른 번역 API (예제는 단순 텍스트 변환)
+evaluate_translation(): 번역 결과 비교 후 최적의 번역 선택
+LangGraph로 워크플로우를 구축하여 번역 비교 자동화
+
+🔹 추가 개선 가능 사항
+평가 로직 고도화: BLEU, ROUGE, METEOR 같은 번역 품질 평가 지표 적용
+LangChain Memory 사용: 이전 번역 데이터 활용
+Multi-agent 기반 확장: 더 다양한 번역 모델 추가
+이 코드를 실행하면 두 가지 번역 결과 중 더 나은 결과를 자동으로 선택할 수 있습니다.
+필요한 부분을 원하는 방식으로 수정해서 사용할 수 있습니다! 🚀
+
+
+
+
+
+
+
